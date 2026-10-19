@@ -1,6 +1,6 @@
 {
   "name": "@mingzzz/opencode-image",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native OpenCode V2 plugin providing dual image generation engines (OpenAI Codex image_gen & Google Nano Banana image_gen_nano) with bundled universal skill router.",
   "type": "module",
   "license": "MIT",
