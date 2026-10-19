@@ -98,7 +98,7 @@ export function loadConfiguration(
   result.nanobanana.apiKey ||= process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   for (const engine of Object.values(result)) {
     if (engine.enabled !== undefined && typeof engine.enabled !== "boolean") throw new Error("enabled must be a boolean");
-    if (!Array.isArray(engine.available_models) || engine.available_models.some(model => typeof model !== "string" || !model)) {
+    if (!Array.isArray(engine.available_models) || engine.available_models.some((model: any) => typeof model !== "string" || !model)) {
       throw new Error("available_models must be an array of non-empty model IDs");
     }
     if (typeof engine.default_model !== "string" || !engine.default_model) throw new Error("default_model must be a non-empty string");
