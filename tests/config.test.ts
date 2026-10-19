@@ -15,18 +15,14 @@ describe("configuration and template resolution", () => {
 
   it("inherits from host opencode.json provider options", () => {
     const mockHostConfig = {
-      provider: {
+      image_generation: {
         openai: {
-          options: {
-            apiKey: "{env:TEST_API_KEY}",
-            baseURL: "{env:TEST_BASE_URL}",
-          },
+          apiKey: "{env:TEST_API_KEY}",
+          baseURL: "{env:TEST_BASE_URL}",
         },
-        google: {
-          options: {
-            apiKey: "{env:TEST_API_KEY}",
-            baseURL: "{env:TEST_BASE_URL}",
-          },
+        nanobanana: {
+          apiKey: "{env:TEST_API_KEY}",
+          baseURL: "{env:TEST_BASE_URL}",
         },
       },
     };

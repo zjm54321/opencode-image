@@ -363,65 +363,83 @@ async function executeNanoBananaImageGen(args, workspaceDir = process.cwd()) {
     return JSON.stringify({
       status: "error",
       error_code: "AUTH_MISSING",
-      message: "No apiKey configured for Gemini / Nano Banana image generation. Please set it in opencode.json (under image_generation.nanobanana or provider.google) or export GEMINI_API_KEY."
+      message: "No apiKey configured for Gemini / Nano Banana image generation. Please set it in opencode.json or imagegen.json."
     });
   }
   const outputDir = path3.join(workspaceDir, ".opencode", "generated-images", "nano");
   await fs3.mkdir(outputDir, { recursive: true });
   const aspectRatio = args.aspect_ratio || "1:1";
   const baseUrl = (config.baseURL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
-  const inlineImages = [];
-  if (args.referenced_image_paths && args.referenced_image_paths.length > 0) {
-    for (const imgPath of args.referenced_image_paths) {
-      try {
-        const absPath = path3.isAbsolute(imgPath) ? imgPath : path3.resolve(workspaceDir, imgPath);
-        const bytes = await fs3.readFile(absPath);
-        const b64 = bytes.toString("base64");
-        const ext = path3.extname(absPath).toLowerCase();
-        const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
-        inlineImages.push({ mimeType, data: b64 });
-      } catch {}
-    }
-  }
+  const isOpenAiCompatible = !baseUrl.includes("googleapis.com") || baseUrl.endsWith("/v1");
   try {
-    const url = baseUrl.includes("key=") ? `${baseUrl}/models/${selectedModel}:predict` : `${baseUrl}/models/${selectedModel}:predict?key=${config.apiKey}`;
-    const payload = {
-      instances: [
-        {
-          prompt: args.prompt
-        }
-      ],
-      parameters: {
-        aspectRatio,
-        outputOptions: {
-          mimeType: "image/png"
+    let b64;
+    if (isOpenAiCompatible) {
+      const endpoint = `${baseUrl}/images/generations`;
+      const size = ASPECT_RATIO_TO_PIXELS[aspectRatio] || "1024x1024";
+      const payload = {
+        model: selectedModel,
+        prompt: args.prompt,
+        size: size === "auto" ? "1024x1024" : size,
+        response_format: "b64_json",
+        n: 1
+      };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`
         },
-        sampleCount: 1
-      }
-    };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      return JSON.stringify({
-        status: "error",
-        error_code: `HTTP_${res.status}`,
-        message: `Gemini Nano Banana API error: ${errText}`
+        body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const errText = await res.text();
+        return JSON.stringify({
+          status: "error",
+          error_code: `HTTP_${res.status}`,
+          message: `Nano Banana Gateway error: ${errText}`
+        });
+      }
+      const responseData = await res.json();
+      b64 = responseData.data?.[0]?.b64_json;
+      if (!b64 && responseData.data?.[0]?.url) {
+        const imgRes = await fetch(responseData.data[0].url);
+        const arrayBuf = await imgRes.arrayBuffer();
+        b64 = Buffer.from(arrayBuf).toString("base64");
+      }
+    } else {
+      const url = baseUrl.includes("key=") ? `${baseUrl}/models/${selectedModel}:predict` : `${baseUrl}/models/${selectedModel}:predict?key=${config.apiKey}`;
+      const payload = {
+        instances: [{ prompt: args.prompt }],
+        parameters: {
+          aspectRatio,
+          outputOptions: { mimeType: "image/png" },
+          sampleCount: 1
+        }
+      };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        return JSON.stringify({
+          status: "error",
+          error_code: `HTTP_${res.status}`,
+          message: `Gemini Nano Banana API error: ${errText}`
+        });
+      }
+      const responseData = await res.json();
+      b64 = responseData.predictions?.[0]?.bytesBase64Encoded || responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     }
-    const responseData = await res.json();
-    const b64 = responseData.predictions?.[0]?.bytesBase64Encoded || responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!b64) {
       return JSON.stringify({
         status: "error",
         error_code: "EMPTY_RESULT",
-        message: "No image data returned from Gemini Nano Banana API."
+        message: "No image data returned from Nano Banana API."
       });
     }
     const timestamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { getConfig } from "./config.js";
+import { ASPECT_RATIO_TO_PIXELS } from "./presets.js";
 
 export interface ImageGenNanoArgs {
   prompt: string;
@@ -45,7 +46,7 @@ export async function executeNanoBananaImageGen(
     return JSON.stringify({
       status: "error",
       error_code: "AUTH_MISSING",
-      message: "No apiKey configured for Gemini / Nano Banana image generation. Please set it in opencode.json (under image_generation.nanobanana or provider.google) or export GEMINI_API_KEY.",
+      message: "No apiKey configured for Gemini / Nano Banana image generation. Please set it in opencode.json or imagegen.json.",
     });
   }
 
@@ -55,72 +56,96 @@ export async function executeNanoBananaImageGen(
   const aspectRatio = args.aspect_ratio || "1:1";
   const baseUrl = (config.baseURL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
 
-  // Prepare input images if any
-  const inlineImages: Array<{ mimeType: string; data: string }> = [];
-  if (args.referenced_image_paths && args.referenced_image_paths.length > 0) {
-    for (const imgPath of args.referenced_image_paths) {
-      try {
-        const absPath = path.isAbsolute(imgPath) ? imgPath : path.resolve(workspaceDir, imgPath);
-        const bytes = await fs.readFile(absPath);
-        const b64 = bytes.toString("base64");
-        const ext = path.extname(absPath).toLowerCase();
-        const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
-        inlineImages.push({ mimeType, data: b64 });
-      } catch {
-        // ignore missing ref
-      }
-    }
-  }
+  // Auto-detect backend protocol:
+  // If baseUrl contains "googleapis.com" -> Native Google GenAI REST
+  // Otherwise (e.g. unified gateway /v1) -> OpenAI-compatible /images/generations
+  const isOpenAiCompatible = !baseUrl.includes("googleapis.com") || baseUrl.endsWith("/v1");
 
   try {
-    // Google Gemini Image Generation endpoint
-    // POST {baseURL}/models/{model}:predict?key={apiKey} or Authorization header
-    const url = baseUrl.includes("key=")
-      ? `${baseUrl}/models/${selectedModel}:predict`
-      : `${baseUrl}/models/${selectedModel}:predict?key=${config.apiKey}`;
+    let b64: string | undefined;
 
-    const payload = {
-      instances: [
-        {
-          prompt: args.prompt,
-        }
-      ],
-      parameters: {
-        aspectRatio: aspectRatio,
-        outputOptions: {
-          mimeType: "image/png"
+    if (isOpenAiCompatible) {
+      // OpenAI-compatible route (EEHUB, OneAPI, OpenRouter, etc.)
+      const endpoint = `${baseUrl}/images/generations`;
+      const size = ASPECT_RATIO_TO_PIXELS[aspectRatio] || "1024x1024";
+
+      const payload = {
+        model: selectedModel,
+        prompt: args.prompt,
+        size: size === "auto" ? "1024x1024" : size,
+        response_format: "b64_json",
+        n: 1,
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
         },
-        sampleCount: 1,
-      }
-    };
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      return JSON.stringify({
-        status: "error",
-        error_code: `HTTP_${res.status}`,
-        message: `Gemini Nano Banana API error: ${errText}`,
+        body: JSON.stringify(payload),
       });
-    }
 
-    const responseData: any = await res.json();
-    const b64 = responseData.predictions?.[0]?.bytesBase64Encoded
-      || responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!res.ok) {
+        const errText = await res.text();
+        return JSON.stringify({
+          status: "error",
+          error_code: `HTTP_${res.status}`,
+          message: `Nano Banana Gateway error: ${errText}`,
+        });
+      }
+
+      const responseData: any = await res.json();
+      b64 = responseData.data?.[0]?.b64_json;
+      if (!b64 && responseData.data?.[0]?.url) {
+        // If gateway returns URL instead of b64
+        const imgRes = await fetch(responseData.data[0].url);
+        const arrayBuf = await imgRes.arrayBuffer();
+        b64 = Buffer.from(arrayBuf).toString("base64");
+      }
+    } else {
+      // Native Google Gemini GenAI format
+      const url = baseUrl.includes("key=")
+        ? `${baseUrl}/models/${selectedModel}:predict`
+        : `${baseUrl}/models/${selectedModel}:predict?key=${config.apiKey}`;
+
+      const payload = {
+        instances: [{ prompt: args.prompt }],
+        parameters: {
+          aspectRatio: aspectRatio,
+          outputOptions: { mimeType: "image/png" },
+          sampleCount: 1,
+        },
+      };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return JSON.stringify({
+          status: "error",
+          error_code: `HTTP_${res.status}`,
+          message: `Gemini Nano Banana API error: ${errText}`,
+        });
+      }
+
+      const responseData: any = await res.json();
+      b64 = responseData.predictions?.[0]?.bytesBase64Encoded
+        || responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    }
 
     if (!b64) {
       return JSON.stringify({
         status: "error",
         error_code: "EMPTY_RESULT",
-        message: "No image data returned from Gemini Nano Banana API.",
+        message: "No image data returned from Nano Banana API.",
       });
     }
 
