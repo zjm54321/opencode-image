@@ -1,0 +1,23 @@
+{
+  "name": "opencode-imagegen",
+  "version": "0.1.0",
+  "description": "Native OpenCode plugin providing dual image generation engines (OpenAI Codex image_gen & Google Nano Banana image_gen_nano) with bundled universal skill router.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./source": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --target=node --outdir=dist",
+    "test": "bun test"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,32 @@
+name: Sync Upstream Skills
+
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Every Monday at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node / Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Validate and build plugin
+        run: |
+          node scripts/sync-upstream-skills.mjs
+          bun run build
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/ skills/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(skills): sync upstream skills and rebuild" && git push)
