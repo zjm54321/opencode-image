@@ -1,13 +1,13 @@
-# opencode-image
+# @mingzzz/opencode-image
 
 > Native OpenCode V2 plugin providing dual image generation engines (`image_gen` for OpenAI Codex and `image_gen_nano` for Google Gemini / Nano Banana) with a bundled universal skill router and zero-token-bloat artifact management.
 
-[![npm version](https://img.shields.io/npm/v/opencode-image.svg)](https://www.npmjs.com/package/opencode-image)
+[![npm version](https://img.shields.io/npm/v/@mingzzz/opencode-image.svg)](https://www.npmjs.com/package/@mingzzz/opencode-image)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## Why `opencode-image`? (Design Philosophy)
+## Why `@mingzzz/opencode-image`? (Design Philosophy)
 
 Integrating image generation into AI coding assistants often suffers from three major flaws:
 
@@ -48,12 +48,12 @@ Integrating image generation into AI coding assistants often suffers from three 
 
 ## Installation
 
-Add `opencode-image` to the `plugins` array in your `opencode.json`:
+Add `@mingzzz/opencode-image` to the `plugins` array in your `opencode.json`:
 
 ```json
 {
   "plugins": [
-    "opencode-image@0.1.0"
+    "@mingzzz/opencode-image@0.1.0"
   ]
 }
 ```
