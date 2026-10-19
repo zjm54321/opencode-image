@@ -28,8 +28,8 @@ Add the plugin and configure `image_generation` (optional if standard providers 
   ],
   "image_generation": {
     "openai": {
-      "apiKey": "{env:EEHUB_API_KEY}",
-      "baseURL": "{env:EEHUB_API_URL}",
+      "apiKey": "{env:OPENAI_API_KEY}",
+      "baseURL": "https://api.openai.com/v1",
       "default_model": "gpt-image-2.5-flare",
       "available_models": [
         "gpt-image-2.5-flare",
@@ -37,8 +37,8 @@ Add the plugin and configure `image_generation` (optional if standard providers 
       ]
     },
     "nanobanana": {
-      "apiKey": "{env:EEHUB_API_KEY}",
-      "baseURL": "{env:EEHUB_API_URL}",
+      "apiKey": "{env:GEMINI_API_KEY}",
+      "baseURL": "https://generativelanguage.googleapis.com/v1beta",
       "default_model": "gemini-3.1-flash-image",
       "available_models": [
         "gemini-3.1-flash-image"
