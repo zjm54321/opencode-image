@@ -1,23 +1,47 @@
 {
-  "name": "opencode-imagegen",
+  "name": "opencode-image",
   "version": "0.1.0",
-  "description": "Native OpenCode plugin providing dual image generation engines (OpenAI Codex image_gen & Google Nano Banana image_gen_nano) with bundled universal skill router.",
+  "description": "Native OpenCode V2 plugin providing dual image generation engines (OpenAI Codex image_gen & Google Nano Banana image_gen_nano) with bundled universal skill router.",
   "type": "module",
-  "main": "./dist/index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zjm54321/opencode-image.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zjm54321/opencode-image/issues"
+  },
+  "homepage": "https://github.com/zjm54321/opencode-image#readme",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "exports": {
     ".": "./dist/index.js",
     "./source": "./src/index.ts"
   },
   "files": [
     "dist",
-    "src",
     "skills",
+    "src",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir=dist",
+    "build": "bun build src/index.ts --target=node --outdir=dist --external @opencode/plugin && cp package.dist.json dist/package.json",
+    "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
-  "license": "MIT"
+  "dependencies": {
+    "@opencode/plugin": "2.0.32",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/node": "^26.6.5",
+    "typescript": "7.0.2"
+  }
 }

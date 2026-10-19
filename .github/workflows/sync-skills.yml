@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sync-upstream-skills
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -19,9 +23,16 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Validate and build plugin
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Sync, validate and build plugin
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node scripts/sync-upstream-skills.mjs
+          node scripts/sync-upstream-skills.mjs --check
+          bun test
           bun run build
 
       - name: Commit and push if changed
@@ -29,4 +40,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add dist/ skills/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(skills): sync upstream skills and rebuild" && git push)
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(skills): sync upstream skills and rebuild"
+            git push
+          fi

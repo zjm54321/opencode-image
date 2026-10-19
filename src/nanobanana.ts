@@ -1,8 +1,7 @@
-import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
-import { getConfig } from "./config.js";
-import { ASPECT_RATIO_TO_PIXELS } from "./presets.js";
+import { getConfig, type ImageEngineConfig } from "./config.js";
+import { BUILTIN_MODEL_PRESETS } from "./presets.js";
+import { errorResult, readImage, saveImage, preview, imageMimeTypes } from "./images.js";
 
 export interface ImageGenNanoArgs {
   prompt: string;
@@ -13,158 +12,84 @@ export interface ImageGenNanoArgs {
   resolution?: string;
 }
 
+type Part = { text: string } | { inlineData: { mimeType: string; data: string }; thoughtSignature?: string };
+type Turn = { role: "user" | "model"; parts: Part[] };
+// Store paths, not base64 blobs; histories are isolated by workspace, endpoint, model and session.
+const sessions = new Map<string, { prompt: string; image: string; signature?: string }>();
+
 export async function executeNanoBananaImageGen(
   args: ImageGenNanoArgs,
-  workspaceDir: string = process.cwd()
+  workspaceDir: string = process.cwd(),
+  options: { config?: ImageEngineConfig; signal?: AbortSignal } = {},
 ): Promise<string> {
-  const config = getConfig().nanobanana;
-
-  if (config.enabled === false) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "PROVIDER_DISABLED",
-      message: "Nano Banana (Gemini) image generation provider is disabled in configuration.",
+  const config = options.config ?? getConfig().nanobanana;
+  if (config.enabled === false) return errorResult("PROVIDER_DISABLED", "Nano Banana image generation is disabled.");
+  const model = args.model || config.default_model || "gemini-3.1-flash-image";
+  if (!config.available_models?.includes(model)) {
+    return errorResult("MODEL_NOT_CONFIGURED", `Model '${model}' is not enabled.`, {
+      requested_model: model, runtime_available_models: config.available_models ?? [],
     });
   }
-
-  const selectedModel = args.model || config.default_model || "gemini-3.1-flash-image";
-
-  // Check if model is allowed
-  const isAvailable = config.available_models?.includes(selectedModel) ?? true;
-  if (!isAvailable) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "MODEL_NOT_CONFIGURED",
-      message: `Model '${selectedModel}' is not enabled in the current environment.`,
-      requested_model: selectedModel,
-      runtime_available_models: config.available_models,
-      recommendation: `Choose one of the runtime_available_models or configure it in opencode.json.`,
-    });
-  }
-
-  if (!config.apiKey) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "AUTH_MISSING",
-      message: "No apiKey configured for Gemini / Nano Banana image generation. Please set it in opencode.json or imagegen.json.",
-    });
-  }
-
-  const outputDir = path.join(workspaceDir, ".opencode", "generated-images", "nano");
-  await fs.mkdir(outputDir, { recursive: true });
-
+  if (!config.apiKey) return errorResult("AUTH_MISSING", "Configure image_generation.nanobanana or provider.google credentials.");
+  const preset = BUILTIN_MODEL_PRESETS[model];
+  const invalid = (message: string) => errorResult("INVALID_ARGUMENT", message);
+  if (!args.prompt?.trim()) return invalid("prompt must not be empty.");
+  if (preset && preset.provider !== "nanobanana") return invalid("Use image_gen for OpenAI models.");
   const aspectRatio = args.aspect_ratio || "1:1";
-  const baseUrl = (config.baseURL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
-
-  // Auto-detect backend protocol:
-  // If baseUrl contains "googleapis.com" -> Native Google GenAI REST
-  // Otherwise (e.g. unified gateway /v1) -> OpenAI-compatible /images/generations
-  const isOpenAiCompatible = !baseUrl.includes("googleapis.com") || baseUrl.endsWith("/v1");
-
+  const resolution = args.resolution || "1K";
+  if (preset && !preset.allowedAspectRatios.includes(aspectRatio)) return invalid(`Unsupported aspect_ratio for ${model}: ${aspectRatio}`);
+  if (preset && !preset.qualityOptions.includes(resolution)) return invalid(`Unsupported resolution for ${model}: ${resolution}`);
+  if (preset && (args.referenced_image_paths?.length || 0) > preset.maxEditImages) return invalid(`${model} supports at most ${preset.maxEditImages} reference images.`);
+  const baseURL = (config.baseURL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
+  const modelID = encodeURIComponent(model.replace(/^models\//, ""));
+  const url = `${baseURL}${baseURL.endsWith("/models") ? "" : "/models"}/${modelID}:generateContent`;
+  const key = JSON.stringify([path.resolve(workspaceDir), baseURL, model, args.session_id]);
   try {
-    let b64: string | undefined;
-
-    if (isOpenAiCompatible) {
-      // OpenAI-compatible route (EEHUB, OneAPI, OpenRouter, etc.)
-      const endpoint = `${baseUrl}/images/generations`;
-      const size = ASPECT_RATIO_TO_PIXELS[aspectRatio] || "1024x1024";
-
-      const payload = {
-        model: selectedModel,
-        prompt: args.prompt,
-        size: size === "auto" ? "1024x1024" : size,
-        response_format: "b64_json",
-        n: 1,
-      };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return JSON.stringify({
-          status: "error",
-          error_code: `HTTP_${res.status}`,
-          message: `Nano Banana Gateway error: ${errText}`,
-        });
-      }
-
-      const responseData: any = await res.json();
-      b64 = responseData.data?.[0]?.b64_json;
-      if (!b64 && responseData.data?.[0]?.url) {
-        // If gateway returns URL instead of b64
-        const imgRes = await fetch(responseData.data[0].url);
-        const arrayBuf = await imgRes.arrayBuffer();
-        b64 = Buffer.from(arrayBuf).toString("base64");
-      }
-    } else {
-      // Native Google Gemini GenAI format
-      const url = baseUrl.includes("key=")
-        ? `${baseUrl}/models/${selectedModel}:predict`
-        : `${baseUrl}/models/${selectedModel}:predict?key=${config.apiKey}`;
-
-      const payload = {
-        instances: [{ prompt: args.prompt }],
-        parameters: {
-          aspectRatio: aspectRatio,
-          outputOptions: { mimeType: "image/png" },
-          sampleCount: 1,
-        },
-      };
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return JSON.stringify({
-          status: "error",
-          error_code: `HTTP_${res.status}`,
-          message: `Gemini Nano Banana API error: ${errText}`,
-        });
-      }
-
-      const responseData: any = await res.json();
-      b64 = responseData.predictions?.[0]?.bytesBase64Encoded
-        || responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const contents: Turn[] = [];
+    const previous = args.session_id ? sessions.get(key) : undefined;
+    if (previous) {
+      const image = await readImage(previous.image, workspaceDir);
+      contents.push({ role: "user", parts: [{ text: previous.prompt }] });
+      contents.push({ role: "model", parts: [{
+        inlineData: { mimeType: image.mimeType, data: image.bytes.toString("base64") },
+        ...(previous.signature ? { thoughtSignature: previous.signature } : {}),
+      }] });
     }
-
-    if (!b64) {
-      return JSON.stringify({
-        status: "error",
-        error_code: "EMPTY_RESULT",
-        message: "No image data returned from Nano Banana API.",
-      });
+    const parts: Part[] = [];
+    for (const reference of args.referenced_image_paths || []) {
+      const image = await readImage(reference, workspaceDir);
+      parts.push({ inlineData: { mimeType: image.mimeType, data: image.bytes.toString("base64") } });
     }
-
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    const hash = crypto.randomBytes(3).toString("hex");
-    const filename = `img-${timestamp}-${hash}.png`;
-    const fullPath = path.join(outputDir, filename);
-
-    const imageBuffer = Buffer.from(b64, "base64");
-    await fs.writeFile(fullPath, imageBuffer);
-
-    const relPath = path.relative(workspaceDir, fullPath).replace(/\\/g, "/");
-
-    return `Image generated successfully using model \`${selectedModel}\` (${aspectRatio}).\n\n![${args.prompt}](${relPath})\n\n**Path**: \`${relPath}\``;
-  } catch (error: any) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "EXECUTION_EXCEPTION",
-      message: error?.message || String(error),
+    parts.push({ text: args.prompt });
+    contents.push({ role: "user", parts });
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+          imageConfig: {
+            aspectRatio,
+            ...(preset?.supportsResolution === false ? {} : { imageSize: resolution === "0.5K" ? "512" : resolution }),
+          },
+        },
+      }),
+      signal: options.signal,
     });
+    if (!response.ok) return errorResult(`HTTP_${response.status}`, `Gemini Nano Banana API error: ${await response.text()}`);
+    const data: any = await response.json();
+    const outputParts: any[] = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = [...outputParts].reverse().find(part => !part.thought && part.inlineData?.data && Object.values(imageMimeTypes).includes(part.inlineData.mimeType));
+    if (!imagePart) return errorResult("EMPTY_RESULT", "No inline image data found in Gemini response parts.");
+    const relative = await saveImage(workspaceDir, "nano", imagePart.inlineData.data, imagePart.inlineData.mimeType);
+    if (args.session_id) {
+      sessions.delete(key);
+      sessions.set(key, { prompt: args.prompt, image: relative, signature: imagePart.thoughtSignature });
+      if (sessions.size > 100) sessions.delete(sessions.keys().next().value!);
+    }
+    return preview(relative);
+  } catch (error) {
+    return errorResult("EXECUTION_EXCEPTION", error instanceof Error ? error.message : String(error));
   }
 }

@@ -1,8 +1,6 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import crypto from "node:crypto";
-import { getConfig } from "./config.js";
+import { getConfig, type ImageEngineConfig } from "./config.js";
 import { BUILTIN_MODEL_PRESETS, ASPECT_RATIO_TO_PIXELS } from "./presets.js";
+import { errorResult, readImage, saveImage, preview } from "./images.js";
 
 export interface ImageGenArgs {
   prompt: string;
@@ -16,145 +14,66 @@ export interface ImageGenArgs {
 
 export async function executeOpenAIImageGen(
   args: ImageGenArgs,
-  workspaceDir: string = process.cwd()
+  workspaceDir: string = process.cwd(),
+  options: { config?: ImageEngineConfig; recentImagePaths?: string[]; signal?: AbortSignal } = {},
 ): Promise<string> {
-  const config = getConfig().openai;
-
-  if (config.enabled === false) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "PROVIDER_DISABLED",
-      message: "OpenAI image generation provider is disabled in configuration.",
+  const config = options.config ?? getConfig().openai;
+  if (config.enabled === false) return errorResult("PROVIDER_DISABLED", "OpenAI image generation is disabled.");
+  const model = args.model || config.default_model || "gpt-image-2.5-flare";
+  if (!config.available_models?.includes(model)) {
+    return errorResult("MODEL_NOT_CONFIGURED", `Model '${model}' is not enabled.`, {
+      requested_model: model, runtime_available_models: config.available_models ?? [],
     });
   }
-
-  const selectedModel = args.model || config.default_model || "gpt-image-2.5-flare";
-
-  // Check if model is allowed
-  const isAvailable = config.available_models?.includes(selectedModel) ?? true;
-  if (!isAvailable) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "MODEL_NOT_CONFIGURED",
-      message: `Model '${selectedModel}' is not enabled in the current environment.`,
-      requested_model: selectedModel,
-      runtime_available_models: config.available_models,
-      recommendation: `Choose one of the runtime_available_models or configure it in opencode.json.`,
-    });
+  if (!config.apiKey) return errorResult("AUTH_MISSING", "Configure image_generation.openai or provider.openai credentials, or OPENAI_API_KEY.");
+  const preset = BUILTIN_MODEL_PRESETS[model];
+  const invalid = (message: string) => errorResult("INVALID_ARGUMENT", message);
+  if (!args.prompt?.trim()) return invalid("prompt must not be empty.");
+  if (preset && preset.provider !== "openai") return invalid("Use image_gen_nano for Google models.");
+  if (args.aspect_ratio && (!ASPECT_RATIO_TO_PIXELS[args.aspect_ratio] || (preset && !preset.allowedAspectRatios.includes(args.aspect_ratio)))) {
+    return invalid(`Unsupported aspect_ratio for ${model}: ${args.aspect_ratio}`);
   }
-
-  if (!config.apiKey) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "AUTH_MISSING",
-      message: "No apiKey configured for OpenAI image generation. Please set it in opencode.json (under image_generation.openai or provider.openai) or export OPENAI_API_KEY.",
-    });
+  if (args.quality && preset && !preset.qualityOptions.includes(args.quality)) return invalid(`Unsupported quality for ${model}: ${args.quality}`);
+  if (args.transparent_background && preset?.supportsTransparency === false) return invalid(`${model} does not support transparent backgrounds.`);
+  const count = args.num_last_images_to_include ?? 0;
+  if (!Number.isInteger(count) || count < 0 || count > 5) return invalid("num_last_images_to_include must be an integer from 0 to 5.");
+  if (count > (options.recentImagePaths?.length ?? 0)) return invalid("Not enough local images in the current conversation; provide referenced_image_paths instead.");
+  const references = [...new Set([...(args.referenced_image_paths || []), ...(count ? options.recentImagePaths!.slice(-count) : [])])];
+  if (preset && references.length > preset.maxEditImages) return invalid(`${model} supports at most ${preset.maxEditImages} reference images.`);
+  const baseURL = (config.baseURL || "https://api.openai.com/v1").replace(/\/+$/, "");
+  let size = ASPECT_RATIO_TO_PIXELS[args.aspect_ratio || "1:1"];
+  // Older GPT Image APIs accept only their three fixed canvas sizes (or auto).
+  if (preset?.requires16Multiple === false && args.aspect_ratio && args.aspect_ratio !== "auto") {
+    size = args.aspect_ratio === "1:1" ? "1024x1024" : args.aspect_ratio === "16:9" ? "1536x1024" : "1024x1536";
   }
-
-  const preset = BUILTIN_MODEL_PRESETS[selectedModel];
-  const size = args.aspect_ratio ? (ASPECT_RATIO_TO_PIXELS[args.aspect_ratio] || "1024x1024") : "1024x1024";
-
-  const isEdit = (args.referenced_image_paths && args.referenced_image_paths.length > 0);
-  const baseUrl = (config.baseURL || "https://api.openai.com/v1").replace(/\/+$/, "");
-  const endpoint = isEdit ? `${baseUrl}/images/edits` : `${baseUrl}/images/generations`;
-
-  const outputDir = path.join(workspaceDir, ".opencode", "generated-images", "openai");
-  await fs.mkdir(outputDir, { recursive: true });
-
+  const fields = {
+    model, prompt: args.prompt, size, quality: args.quality || "auto",
+    ...(args.transparent_background ? { background: "transparent", output_format: "png" } : {}),
+  };
   try {
-    let responseData: any;
-
-    if (!isEdit) {
-      const payload: Record<string, any> = {
-        model: selectedModel,
-        prompt: args.prompt,
-        size: size === "auto" ? "1024x1024" : size,
-        quality: args.quality || "auto",
-        response_format: "b64_json",
-      };
-
-      if (args.transparent_background && preset?.supportsTransparency) {
-        payload.background = "transparent";
+    let body: string | FormData;
+    const headers: Record<string, string> = { Authorization: `Bearer ${config.apiKey}` };
+    if (references.length) {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields)) form.append(key, value);
+      for (const reference of references) {
+        const { bytes, mimeType, name } = await readImage(reference, workspaceDir);
+        form.append("image[]", new Blob([bytes], { type: mimeType }), name);
       }
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return JSON.stringify({
-          status: "error",
-          error_code: `HTTP_${res.status}`,
-          message: `OpenAI Image API error: ${errText}`,
-        });
-      }
-
-      responseData = await res.json();
+      body = form;
     } else {
-      const formData = new FormData();
-      formData.append("model", selectedModel);
-      formData.append("prompt", args.prompt);
-      formData.append("response_format", "b64_json");
-
-      for (const imagePath of args.referenced_image_paths!) {
-        const absPath = path.isAbsolute(imagePath) ? imagePath : path.resolve(workspaceDir, imagePath);
-        const fileBytes = await fs.readFile(absPath);
-        const blob = new Blob([fileBytes], { type: "image/png" });
-        formData.append("image", blob, path.basename(absPath));
-        break;
-      }
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        return JSON.stringify({
-          status: "error",
-          error_code: `HTTP_${res.status}`,
-          message: `OpenAI Image Edit API error: ${errText}`,
-        });
-      }
-
-      responseData = await res.json();
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(fields);
     }
-
-    const b64 = responseData.data?.[0]?.b64_json;
-    if (!b64) {
-      return JSON.stringify({
-        status: "error",
-        error_code: "EMPTY_RESULT",
-        message: "No image data returned from OpenAI Image API.",
-      });
-    }
-
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    const hash = crypto.randomBytes(3).toString("hex");
-    const filename = `img-${timestamp}-${hash}.png`;
-    const fullPath = path.join(outputDir, filename);
-
-    const imageBuffer = Buffer.from(b64, "base64");
-    await fs.writeFile(fullPath, imageBuffer);
-
-    const relPath = path.relative(workspaceDir, fullPath).replace(/\\/g, "/");
-
-    return `Image generated successfully using model \`${selectedModel}\`.\n\n![${args.prompt}](${relPath})\n\n**Path**: \`${relPath}\``;
-  } catch (error: any) {
-    return JSON.stringify({
-      status: "error",
-      error_code: "EXECUTION_EXCEPTION",
-      message: error?.message || String(error),
+    const response = await fetch(`${baseURL}/images/${references.length ? "edits" : "generations"}`, {
+      method: "POST", headers, body, signal: options.signal,
     });
+    if (!response.ok) return errorResult(`HTTP_${response.status}`, `OpenAI Image API error: ${await response.text()}`);
+    const data: any = await response.json();
+    if (!data.data?.[0]?.b64_json) return errorResult("EMPTY_RESULT", "No image data returned from OpenAI Image API.");
+    const relative = await saveImage(workspaceDir, "openai", data.data[0].b64_json, "image/png");
+    return preview(relative);
+  } catch (error) {
+    return errorResult("EXECUTION_EXCEPTION", error instanceof Error ? error.message : String(error));
   }
 }

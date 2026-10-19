@@ -7,6 +7,7 @@ export interface ModelPreset {
   maxEditImages: number;
   qualityOptions: string[];
   requires16Multiple?: boolean;
+  supportsResolution?: boolean;
 }
 
 export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
@@ -16,7 +17,7 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
     provider: "openai",
     displayName: "OpenAI GPT Image 2.5 Flare",
     supportsTransparency: true,
-    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "auto"],
+    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "21:9", "auto"],
     maxEditImages: 10,
     qualityOptions: ["low", "medium", "high", "xhigh", "max", "auto"],
     requires16Multiple: true,
@@ -26,7 +27,7 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
     provider: "openai",
     displayName: "OpenAI GPT Image 2.5 Sunburst",
     supportsTransparency: true,
-    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "auto"],
+    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "21:9", "auto"],
     maxEditImages: 10,
     qualityOptions: ["low", "medium", "high", "xhigh", "max", "auto"],
     requires16Multiple: true,
@@ -36,7 +37,7 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
     provider: "openai",
     displayName: "OpenAI Image 2.5 (Alias -> Flare)",
     supportsTransparency: true,
-    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "auto"],
+    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "21:9", "auto"],
     maxEditImages: 10,
     qualityOptions: ["low", "medium", "high", "xhigh", "max", "auto"],
     requires16Multiple: true,
@@ -46,7 +47,7 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
     provider: "openai",
     displayName: "OpenAI GPT Image 2",
     supportsTransparency: false,
-    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "auto"],
+    allowedAspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "auto"],
     maxEditImages: 5,
     qualityOptions: ["low", "medium", "high", "auto"],
     requires16Multiple: true,
@@ -73,6 +74,26 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
   },
 
   // Google Gemini / Nano Banana Family
+  "gpt-image-1": {
+    id: "gpt-image-1",
+    provider: "openai",
+    displayName: "OpenAI GPT Image 1",
+    supportsTransparency: true,
+    allowedAspectRatios: ["1:1", "16:9", "9:16", "auto"],
+    maxEditImages: 5,
+    qualityOptions: ["low", "medium", "high", "auto"],
+    requires16Multiple: false,
+  },
+  "gemini-2.5-flash-image": {
+    id: "gemini-2.5-flash-image",
+    provider: "nanobanana",
+    displayName: "Nano Banana (Gemini 2.5 Flash Image)",
+    supportsTransparency: false,
+    allowedAspectRatios: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+    maxEditImages: 3,
+    qualityOptions: ["1K"],
+    supportsResolution: false,
+  },
   "gemini-3.1-flash-image": {
     id: "gemini-3.1-flash-image",
     provider: "nanobanana",
@@ -107,8 +128,8 @@ export const BUILTIN_MODEL_PRESETS: Record<string, ModelPreset> = {
  */
 export const ASPECT_RATIO_TO_PIXELS: Record<string, string> = {
   "1:1": "1024x1024",
-  "16:9": "1536x1024",
-  "9:16": "1024x1536",
+  "16:9": "1536x864",
+  "9:16": "864x1536",
   "4:3": "1280x960",
   "3:4": "960x1280",
   "3:2": "1536x1024",

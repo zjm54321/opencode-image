@@ -18,8 +18,8 @@ describe("presets and geometry constraints", () => {
 
   it("maps visual aspect ratios to 16-multiple pixel dimensions", () => {
     expect(ASPECT_RATIO_TO_PIXELS["1:1"]).toBe("1024x1024");
-    expect(ASPECT_RATIO_TO_PIXELS["16:9"]).toBe("1536x1024");
-    expect(ASPECT_RATIO_TO_PIXELS["9:16"]).toBe("1024x1536");
+    expect(ASPECT_RATIO_TO_PIXELS["16:9"]).toBe("1536x864");
+    expect(ASPECT_RATIO_TO_PIXELS["9:16"]).toBe("864x1536");
   });
 
   it("snaps arbitrary dimensions to valid 16 multiples within bounds", () => {

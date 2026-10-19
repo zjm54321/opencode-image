@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Fallback CLI for explicit image generation or editing with GPT Image models.
 
-Used only when the user explicitly opts into CLI fallback mode, or when explicit
-transparent output requires the `gpt-image-1.5` fallback path.
+Used only when the user explicitly opts into CLI fallback mode.
 
-Defaults to gpt-image-2 and a structured prompt augmentation workflow.
+Defaults to gpt-image-1.5 and a structured prompt augmentation workflow.
 """
 
 from __future__ import annotations
@@ -22,25 +21,19 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from io import BytesIO
 
-DEFAULT_MODEL = "gpt-image-2"
-DEFAULT_SIZE = "auto"
-DEFAULT_QUALITY = "medium"
+DEFAULT_MODEL = "gpt-image-1.5"
+DEFAULT_SIZE = "1024x1024"
+DEFAULT_QUALITY = "auto"
 DEFAULT_OUTPUT_FORMAT = "png"
 DEFAULT_CONCURRENCY = 5
 DEFAULT_DOWNSCALE_SUFFIX = "-web"
 DEFAULT_OUTPUT_PATH = "output/imagegen/output.png"
 GPT_IMAGE_MODEL_PREFIX = "gpt-image-"
 
-ALLOWED_LEGACY_SIZES = {"1024x1024", "1536x1024", "1024x1536", "auto"}
+ALLOWED_SIZES = {"1024x1024", "1536x1024", "1024x1536", "auto"}
 ALLOWED_QUALITIES = {"low", "medium", "high", "auto"}
 ALLOWED_BACKGROUNDS = {"transparent", "opaque", "auto", None}
 ALLOWED_INPUT_FIDELITIES = {"low", "high", None}
-
-GPT_IMAGE_2_MODEL = "gpt-image-2"
-GPT_IMAGE_2_MIN_PIXELS = 655_360
-GPT_IMAGE_2_MAX_PIXELS = 8_294_400
-GPT_IMAGE_2_MAX_EDGE = 3840
-GPT_IMAGE_2_MAX_RATIO = 3.0
 
 MAX_IMAGE_BYTES = 50 * 1024 * 1024
 MAX_BATCH_JOBS = 500
@@ -111,48 +104,10 @@ def _normalize_output_format(fmt: Optional[str]) -> str:
     return "jpeg" if fmt == "jpg" else fmt
 
 
-def _parse_size(size: str) -> Optional[Tuple[int, int]]:
-    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)", size)
-    if not match:
-        return None
-    return int(match.group(1)), int(match.group(2))
-
-
-def _validate_gpt_image_2_size(size: str) -> None:
-    if size == "auto":
-        return
-
-    parsed = _parse_size(size)
-    if parsed is None:
-        _die("size must be auto or WIDTHxHEIGHT, for example 1024x1024.")
-
-    width, height = parsed
-    max_edge = max(width, height)
-    min_edge = min(width, height)
-    total_pixels = width * height
-
-    if max_edge > GPT_IMAGE_2_MAX_EDGE:
+def _validate_size(size: str) -> None:
+    if size not in ALLOWED_SIZES:
         _die(
-            "gpt-image-2 size maximum edge length must be less than or equal to 3840px."
-        )
-    if width % 16 != 0 or height % 16 != 0:
-        _die("gpt-image-2 size width and height must be multiples of 16px.")
-    if max_edge / min_edge > GPT_IMAGE_2_MAX_RATIO:
-        _die("gpt-image-2 size long edge to short edge ratio must not exceed 3:1.")
-    if total_pixels < GPT_IMAGE_2_MIN_PIXELS or total_pixels > GPT_IMAGE_2_MAX_PIXELS:
-        _die(
-            "gpt-image-2 size total pixels must be at least 655,360 and no more than 8,294,400."
-        )
-
-
-def _validate_size(size: str, model: str) -> None:
-    if model == GPT_IMAGE_2_MODEL:
-        _validate_gpt_image_2_size(size)
-        return
-
-    if size not in ALLOWED_LEGACY_SIZES:
-        _die(
-            "size must be one of 1024x1024, 1536x1024, 1024x1536, or auto for this GPT Image model."
+            "size must be one of 1024x1024, 1536x1024, 1024x1536, or auto for GPT image models."
         )
 
 
@@ -183,38 +138,17 @@ def _validate_transparency(background: Optional[str], output_format: str) -> Non
         _die("transparent background requires output-format png or webp.")
 
 
-def _validate_model_specific_options(
-    *,
-    model: str,
-    background: Optional[str],
-    input_fidelity: Optional[str] = None,
-) -> None:
-    if model != GPT_IMAGE_2_MODEL:
-        return
-    if background == "transparent":
-        _die(
-            "transparent backgrounds are not supported in gpt-image-2, the latest model. "
-            "Use --model gpt-image-1.5 --background transparent --output-format png instead."
-        )
-    if input_fidelity is not None:
-        _die(
-            "input_fidelity is not supported in gpt-image-2 because image inputs always use high fidelity for this model."
-        )
-
-
 def _validate_generate_payload(payload: Dict[str, Any]) -> None:
-    model = str(payload.get("model", DEFAULT_MODEL))
-    _validate_model(model)
+    _validate_model(str(payload.get("model", DEFAULT_MODEL)))
     n = int(payload.get("n", 1))
     if n < 1 or n > 10:
         _die("n must be between 1 and 10")
     size = str(payload.get("size", DEFAULT_SIZE))
     quality = str(payload.get("quality", DEFAULT_QUALITY))
     background = payload.get("background")
-    _validate_size(size, model)
+    _validate_size(size)
     _validate_quality(quality)
     _validate_background(background)
-    _validate_model_specific_options(model=model, background=background)
     oc = payload.get("output_compression")
     if oc is not None and not (0 <= int(oc) <= 100):
         _die("output_compression must be between 0 and 100")
@@ -259,9 +193,7 @@ def _augment_prompt(args: argparse.Namespace, prompt: str) -> str:
     return _augment_prompt_fields(args.augment, prompt, fields)
 
 
-def _augment_prompt_fields(
-    augment: bool, prompt: str, fields: Dict[str, Optional[str]]
-) -> str:
+def _augment_prompt_fields(augment: bool, prompt: str, fields: Dict[str, Optional[str]]) -> str:
     if not augment:
         return prompt
 
@@ -284,7 +216,7 @@ def _augment_prompt_fields(
     if fields.get("materials"):
         sections.append(f"Materials/textures: {fields['materials']}")
     if fields.get("text"):
-        sections.append(f'Text (verbatim): "{fields["text"]}"')
+        sections.append(f"Text (verbatim): \"{fields['text']}\"")
     if fields.get("constraints"):
         sections.append(f"Constraints: {fields['constraints']}")
     if fields.get("negative"):
@@ -331,9 +263,7 @@ def _derive_downscale_path(path: Path, suffix: str) -> Path:
     return path.with_name(f"{path.stem}{suffix}{path.suffix}")
 
 
-def _downscale_image_bytes(
-    image_bytes: bytes, *, max_dim: int, output_format: str
-) -> bytes:
+def _downscale_image_bytes(image_bytes: bytes, *, max_dim: int, output_format: str) -> bytes:
     try:
         from PIL import Image
     except Exception:
@@ -348,22 +278,16 @@ def _downscale_image_bytes(
         scale = min(1.0, float(max_dim) / float(max(w, h)))
         target = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
 
-        resized = (
-            img if target == (w, h) else img.resize(target, Image.Resampling.LANCZOS)
-        )
+        resized = img if target == (w, h) else img.resize(target, Image.Resampling.LANCZOS)
 
         fmt = output_format.lower()
         if fmt == "jpg":
             fmt = "jpeg"
 
         if fmt == "jpeg":
-            if resized.mode in ("RGBA", "LA") or (
-                "transparency" in getattr(resized, "info", {})
-            ):
+            if resized.mode in ("RGBA", "LA") or ("transparency" in getattr(resized, "info", {})):
                 bg = Image.new("RGB", resized.size, (255, 255, 255))
-                bg.paste(
-                    resized.convert("RGBA"), mask=resized.convert("RGBA").split()[-1]
-                )
+                bg.paste(resized.convert("RGBA"), mask=resized.convert("RGBA").split()[-1])
                 resized = bg
             else:
                 resized = resized.convert("RGB")
@@ -401,9 +325,7 @@ def _decode_write_and_downscale(
         if derived.exists() and not force:
             _die(f"Output already exists: {derived} (use --force to overwrite)")
         derived.parent.mkdir(parents=True, exist_ok=True)
-        resized = _downscale_image_bytes(
-            raw, max_dim=downscale_max_dim, output_format=output_format
-        )
+        resized = _downscale_image_bytes(raw, max_dim=downscale_max_dim, output_format=output_format)
         derived.write_bytes(resized)
         print(f"Wrote {derived}")
 
@@ -412,9 +334,7 @@ def _create_client():
     try:
         from openai import OpenAI
     except ImportError:
-        _die(
-            f"openai SDK not installed in the active environment. {_dependency_hint('openai')}"
-        )
+        _die(f"openai SDK not installed in the active environment. {_dependency_hint('openai')}")
     return OpenAI()
 
 
@@ -516,7 +436,10 @@ def _job_output_paths(
 
     if n == 1:
         return [base]
-    return [base.with_name(f"{base.stem}-{i}{base.suffix}") for i in range(1, n + 1)]
+    return [
+        base.with_name(f"{base.stem}-{i}{base.suffix}")
+        for i in range(1, n + 1)
+    ]
 
 
 def _extract_retry_after_seconds(exc: Exception) -> Optional[float]:
@@ -602,25 +525,17 @@ async def _run_generate_batch(args: argparse.Namespace) -> int:
             prompt = str(job["prompt"]).strip()
             fields = _merge_non_null(base_fields, job.get("fields", {}))
             # Allow flat job keys as well (use_case, scene, etc.)
-            fields = _merge_non_null(
-                fields, {k: job.get(k) for k in base_fields.keys()}
-            )
+            fields = _merge_non_null(fields, {k: job.get(k) for k in base_fields.keys()})
             augmented = _augment_prompt_fields(args.augment, prompt, fields)
 
             job_payload = dict(base_payload)
             job_payload["prompt"] = augmented
-            job_payload = _merge_non_null(
-                job_payload, {k: job.get(k) for k in base_payload.keys()}
-            )
+            job_payload = _merge_non_null(job_payload, {k: job.get(k) for k in base_payload.keys()})
             job_payload = {k: v for k, v in job_payload.items() if v is not None}
 
             _validate_generate_payload(job_payload)
-            effective_output_format = _normalize_output_format(
-                job_payload.get("output_format")
-            )
-            _validate_transparency(
-                job_payload.get("background"), effective_output_format
-            )
+            effective_output_format = _normalize_output_format(job_payload.get("output_format"))
+            _validate_transparency(job_payload.get("background"), effective_output_format)
             job_payload["output_format"] = effective_output_format
 
             n = int(job_payload.get("n", 1))
@@ -635,8 +550,7 @@ async def _run_generate_batch(args: argparse.Namespace) -> int:
             downscaled = None
             if args.downscale_max_dim is not None:
                 downscaled = [
-                    str(_derive_downscale_path(p, args.downscale_suffix))
-                    for p in outputs
+                    str(_derive_downscale_path(p, args.downscale_suffix)) for p in outputs
                 ]
             _print_request(
                 {
@@ -710,9 +624,7 @@ async def _run_generate_batch(args: argparse.Namespace) -> int:
                 raise
             return i, str(exc)
 
-    tasks = [
-        asyncio.create_task(run_job(i, job)) for i, job in enumerate(jobs, start=1)
-    ]
+    tasks = [asyncio.create_task(run_job(i, job)) for i, job in enumerate(jobs, start=1)]
 
     try:
         await asyncio.gather(*tasks)
@@ -754,9 +666,7 @@ def _generate(args: argparse.Namespace) -> None:
     output_paths = _build_output_paths(args.out, output_format, args.n, args.out_dir)
     downscaled = None
     if args.downscale_max_dim is not None:
-        downscaled = [
-            str(_derive_downscale_path(p, args.downscale_suffix)) for p in output_paths
-        ]
+        downscaled = [str(_derive_downscale_path(p, args.downscale_suffix)) for p in output_paths]
 
     if args.dry_run:
         _print_request(
@@ -825,9 +735,7 @@ def _edit(args: argparse.Namespace) -> None:
     output_paths = _build_output_paths(args.out, output_format, args.n, args.out_dir)
     downscaled = None
     if args.downscale_max_dim is not None:
-        downscaled = [
-            str(_derive_downscale_path(p, args.downscale_suffix)) for p in output_paths
-        ]
+        downscaled = [str(_derive_downscale_path(p, args.downscale_suffix)) for p in output_paths]
 
     if args.dry_run:
         payload_preview = dict(payload)
@@ -977,9 +885,7 @@ def main() -> int:
         help="Generate multiple prompts concurrently (JSONL input)",
     )
     _add_shared_args(batch_parser)
-    batch_parser.add_argument(
-        "--input", required=True, help="Path to JSONL file (one job per line)"
-    )
+    batch_parser.add_argument("--input", required=True, help="Path to JSONL file (one job per line)")
     batch_parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     batch_parser.add_argument("--max-attempts", type=int, default=3)
     batch_parser.add_argument("--fail-fast", action="store_true")
@@ -999,27 +905,17 @@ def main() -> int:
         _die("--concurrency must be between 1 and 25")
     if getattr(args, "max_attempts", 3) < 1 or getattr(args, "max_attempts", 3) > 10:
         _die("--max-attempts must be between 1 and 10")
-    if args.output_compression is not None and not (
-        0 <= args.output_compression <= 100
-    ):
+    if args.output_compression is not None and not (0 <= args.output_compression <= 100):
         _die("--output-compression must be between 0 and 100")
     if args.command == "generate-batch" and not args.out_dir:
         _die("generate-batch requires --out-dir")
-    if (
-        getattr(args, "downscale_max_dim", None) is not None
-        and args.downscale_max_dim < 1
-    ):
+    if getattr(args, "downscale_max_dim", None) is not None and args.downscale_max_dim < 1:
         _die("--downscale-max-dim must be >= 1")
 
-    _validate_model(args.model)
-    _validate_size(args.size, args.model)
+    _validate_size(args.size)
     _validate_quality(args.quality)
     _validate_background(args.background)
-    _validate_model_specific_options(
-        model=args.model,
-        background=args.background,
-        input_fidelity=getattr(args, "input_fidelity", None),
-    )
+    _validate_model(args.model)
     _ensure_api_key(args.dry_run)
 
     args.func(args)
