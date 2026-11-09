@@ -20,22 +20,23 @@
   "nanobanana": {
     "repository": "https://github.com/AntonioCardenas/generate-nanobanana.git",
     "directory": ".",
-    "commit": "725d003705b432a9ee8ffeb209a48aeb149c019b",
+    "commit": "f24c334880d04dca7c546b6968d65a9c388aa492",
     "files": {
       ".gitignore": "cf237c7aff44efbe6e502e645c3e06da03a69d7bdeb43392108ef3348143417e",
       "CODE_OF_CONDUCT.md": "8b3dc743993f08c0208280eaade0f94bab16e18274e5c5b47f61441581549d76",
       "CONTRIBUTING.md": "e993a89379397ad387002c3065bdfa541f00702e57e71c46533556b5b873cfee",
       "LICENSE": "2b46b3e26d28d726b6bc5401cbc58dae3054801d804abc9657c254668ae32a18",
-      "models/gemini-omni-flash.md": "066476b9be352df96d5c0257b8bfb487a32cd366a313642d5def7485e7e9c8c2",
-      "models/nano-banana-2-lite.md": "84083493160e29b8494354e05af8e6651a32cb9a615d038576ecde9ec3fa8567",
-      "models/nano-banana-2.md": "32802a3852d069a76c8ee322c82160938343b2d2f46fdc535d575fc19b165b09",
-      "models/nano-banana-pro.md": "8f4612081e7d4c451be9ff959de7c2839cf02c323dc819495a26b8695d54de19",
+      "models/gemini-4-argon.md": "b7fb441a3fce7cf67d6574ee1febcf2436be3b87feb95b5eaaebd2c9b91a73ff",
+      "models/gemini-omni-flash.md": "46ae407ca15d2053b11a8fc5d7aac626c69692db517c1e65a0dcca262c582055",
+      "models/nano-banana-2-lite.md": "e56f085653553a206148e38335937a9fb28b102740ed91accccdd9441d10762a",
+      "models/nano-banana-2.md": "44d93aedddb5786e9137ef4f7f65f57b9c8bea31baeb90cef3fda9f9e365d491",
+      "models/nano-banana-pro.md": "d69ce37ca8a5868f4f811b84444347016511b4c4b830201d2b41ed1e222ed410",
       "nanobanana_y2k_poster.png": "700a579dacca32f70ce669f5fc10e5f74ce125765250c32dcfa4c3388e93413d",
-      "package.json": "72889e25518367f6dd1d9cbcee531de791c8433eb69a884c7eb4fad3e4b71237",
-      "README.es.md": "8a8b8ad3a39ba56ae4850bcf6d70df80294b976b3c8cd23dd62a8831b7943020",
-      "README.md": "1327a5475d1a7c50e4c1ff7ac0c8b8fc88d7918c566cd80b86c53f270869650a",
+      "package.json": "42666ca6bbb8abdfde1daca3a8e1e6d25e8f062c4bd6f0a649665cbcc1b3708e",
+      "README.es.md": "8e512f3d68496c980e4e7dd14e888ffdf82f8f84a54998c4275b30e794b7d802",
+      "README.md": "7760134c9254ac1686c6c969617f46bd68264bf647a9ca773b45ed061c866cb2",
       "SECURITY.md": "6611659920b42b8c0bd481125e7f17eae591a5280c91fcca30c88c23ba62c00d",
-      "SKILL.md": "cbc3b104d27f8fcdf6fd437ce2ae2e668cb9d5563d94b74e5b318bb7928bf3f9"
+      "SKILL.md": "bc9490de68faed3cf58d09bbffc0ee4ca2ddb4641313424ecffeb3ad25461f2c"
     }
   }
 }
