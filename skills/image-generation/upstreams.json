@@ -20,23 +20,26 @@
   "nanobanana": {
     "repository": "https://github.com/AntonioCardenas/generate-nanobanana.git",
     "directory": ".",
-    "commit": "f24c334880d04dca7c546b6968d65a9c388aa492",
+    "commit": "f63cce431d2087deb8186b5b75ce1d66300cbbb7",
     "files": {
       ".gitignore": "cf237c7aff44efbe6e502e645c3e06da03a69d7bdeb43392108ef3348143417e",
       "CODE_OF_CONDUCT.md": "8b3dc743993f08c0208280eaade0f94bab16e18274e5c5b47f61441581549d76",
       "CONTRIBUTING.md": "e993a89379397ad387002c3065bdfa541f00702e57e71c46533556b5b873cfee",
       "LICENSE": "2b46b3e26d28d726b6bc5401cbc58dae3054801d804abc9657c254668ae32a18",
-      "models/gemini-4-argon.md": "b7fb441a3fce7cf67d6574ee1febcf2436be3b87feb95b5eaaebd2c9b91a73ff",
-      "models/gemini-omni-flash.md": "46ae407ca15d2053b11a8fc5d7aac626c69692db517c1e65a0dcca262c582055",
+      "models/gemini-4-argon.md": "2904ce8bd9145317cc580ad5f2eaa95d785e6fa79f9fc627dffeb3c3940b6da0",
+      "models/gemini-4-carbon.md": "9dbc66b5072dd301fc1fe6b6b3e1a28d72e6b5ad8c1e98b022533700bbffbe41",
+      "models/gemini-4-hydrogen.md": "d9213663cf2de5f3f81bce10f9736ec1f461403fe7a69a7c7744d4a0bd321ca0",
+      "models/gemini-4-neon.md": "2e0e9a246d2653dafa669737c08aa40c7ecf71d89313c97a778fb704ac7444eb",
+      "models/gemini-omni-flash.md": "41ef5dff439c78487e5dda0f95bb5b83619e7c1e768199e97ec712763592d549",
       "models/nano-banana-2-lite.md": "e56f085653553a206148e38335937a9fb28b102740ed91accccdd9441d10762a",
       "models/nano-banana-2.md": "44d93aedddb5786e9137ef4f7f65f57b9c8bea31baeb90cef3fda9f9e365d491",
       "models/nano-banana-pro.md": "d69ce37ca8a5868f4f811b84444347016511b4c4b830201d2b41ed1e222ed410",
-      "nanobanana_y2k_poster.png": "700a579dacca32f70ce669f5fc10e5f74ce125765250c32dcfa4c3388e93413d",
-      "package.json": "42666ca6bbb8abdfde1daca3a8e1e6d25e8f062c4bd6f0a649665cbcc1b3708e",
-      "README.es.md": "8e512f3d68496c980e4e7dd14e888ffdf82f8f84a54998c4275b30e794b7d802",
-      "README.md": "7760134c9254ac1686c6c969617f46bd68264bf647a9ca773b45ed061c866cb2",
+      "nanobanana_y2k_poster.png": "68ac18be7722e05796db1cb15d685b11ebfd61edc6e52b8b8771816678b1a0ed",
+      "package.json": "a6ba1d9f5ec381567bc5e04e42bf5defbfaa1767948bb9adfd8341fff7bc5c1c",
+      "README.es.md": "5504f63e964ca5394d76b54a18faae8ba745f1fc7beab02a731b54c0edaad301",
+      "README.md": "2ca83960ba93685f6804296098d73f97f70dac0db5834ca8b7947cd59d4f9ccb",
       "SECURITY.md": "6611659920b42b8c0bd481125e7f17eae591a5280c91fcca30c88c23ba62c00d",
-      "SKILL.md": "bc9490de68faed3cf58d09bbffc0ee4ca2ddb4641313424ecffeb3ad25461f2c"
+      "SKILL.md": "e25af552702dca4b7bbcc46d8c19b5744da24fa2c81d1d0230b284c4ffb3e632"
     }
   }
 }
